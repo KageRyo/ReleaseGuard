@@ -1,5 +1,7 @@
 # ReleaseGuard
 
+[![CI](https://github.com/KageRyo/ReleaseGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/KageRyo/ReleaseGuard/actions/workflows/ci.yml) [![Latest release](https://img.shields.io/github/v/release/KageRyo/ReleaseGuard?display_name=tag&sort=semver)](https://github.com/KageRyo/ReleaseGuard/releases) [![License](https://img.shields.io/github/license/KageRyo/ReleaseGuard.svg)](LICENSE)
+
 > ReleaseGuard is a standalone dataset release gate for CI pipelines.
 
 ReleaseGuard checks a candidate CSV dataset against a small declarative `release.yaml`, then returns PASS or FAIL before publication. It checks file schemas, uniqueness, references, timestamp order, and SHA-256 integrity. It is a local command line program with no Python runtime, database, service, or network connection during validation. It is not an ETL tool, data catalog, lineage platform, ML validator, or replacement for Great Expectations or DVC.

@@ -4,9 +4,25 @@
 
 ReleaseGuard checks a candidate CSV dataset against a small declarative `release.yaml`, then returns PASS or FAIL before publication. It checks file schemas, uniqueness, references, timestamp order, and SHA-256 integrity. It is a local command line program with no Python runtime, database, service, or network connection during validation. It is not an ETL tool, data catalog, lineage platform, ML validator, or replacement for Great Expectations or DVC.
 
-## Build and quick start
+## Install
 
-Install a Rust toolchain and run `cargo build --release --locked`. The standalone executable is `target/release/releaseguard` on Unix or `target/release/releaseguard.exe` on Windows. Copy that executable into `PATH` or use it directly.
+Download the archive for your platform from [GitHub Releases](https://github.com/KageRyo/ReleaseGuard/releases). The v0.1.0 assets are named `releaseguard-v0.1.0-linux-x86_64.tar.gz`, `releaseguard-v0.1.0-windows-x86_64.zip`, and `releaseguard-v0.1.0-macos-aarch64.tar.gz`. Each archive includes the executable and its license notices; `SHA256SUMS` covers all three archives.
+
+The Linux x86_64 binary targets GNU/Linux and is built on Ubuntu 22.04. The macOS binary supports Apple silicon (arm64).
+
+On Linux x86_64 or macOS arm64, extract the matching `.tar.gz` archive and put the executable on your `PATH`. Use the `linux-x86_64` asset on Linux and `macos-aarch64` on Apple silicon.
+
+```sh
+tar -xzf releaseguard-v0.1.0-linux-x86_64.tar.gz
+install -m 0755 releaseguard "$HOME/.local/bin/releaseguard"
+releaseguard --help
+```
+
+On Windows x86_64, extract the `.zip` archive, add the extracted directory to `PATH`, then run `releaseguard.exe --help`. No Rust toolchain is needed to use a release binary.
+
+For development from source, install Rust and run `cargo build --release --locked`. The executable is written to `target/release/releaseguard` on Unix or `target/release/releaseguard.exe` on Windows.
+
+## Quick start
 
 ```sh
 releaseguard init ./dataset
@@ -55,7 +71,7 @@ checks:
     join: { left: actions.event_id, right: events.event_id }
 ```
 
-`files` is a nonempty map of aliases to relative CSV paths and nonempty field schemas. Use `/` as the path separator; absolute paths, `.`/`..` components, and backslashes are rejected. `manifest.json` and paths beneath it are reserved. Paths stay inside the dataset directory, including through symbolic links. Every configured schema field must exist as a CSV column; extra columns are allowed. Empty CSV cells are null. `nullable` defaults to `false`. Supported types are `string`, signed 64-bit `integer`, finite `float`, lowercase `true`/`false` `boolean`, and RFC 3339 `datetime` with an explicit UTC offset or `Z`. Datetimes compare as instants, so different offsets representing the same time compare equal. An empty string is null even for `string` fields. CSV headers and values are case sensitive.
+`files` is a nonempty map of aliases to relative CSV paths and nonempty field schemas. Use `/` as the path separator; absolute paths, `.`/`..` components, and backslashes are rejected. `release.yaml`, `manifest.json`, and paths beneath either are reserved. Paths stay inside the dataset directory, including through symbolic links. Every configured schema field must exist as a CSV column; extra columns are allowed. Empty CSV cells are null. `nullable` defaults to `false`. Supported types are `string`, signed 64-bit `integer`, finite `float`, lowercase `true`/`false` `boolean`, and RFC 3339 `datetime` with an explicit UTC offset or `Z`. Datetimes compare as instants, so different offsets representing the same time compare equal. An empty string is null even for `string` fields. CSV headers and values are case sensitive.
 
 Every file receives an automatic `<alias>-schema` check. Explicit check IDs must be unique and cannot collide with those automatic IDs. Field references use `alias.column` and must name a configured schema field. `unique` counts repeated non-null values after the first occurrence. `foreign_key` requires each non-null source value to occur in the target field; null targets are ignored. `temporal_order` supports `<`, `<=`, `>`, and `>=`. Without `join`, it compares fields in the same row of one file. Different files require `join` with equality key fields from the respective files. Every left row must match exactly one right row, and the timestamp comparison must hold. Missing or ambiguous join matches and null or unparseable timestamp values fail the temporal check. Add separate `unique` and `foreign_key` checks if those constraints also matter independently.
 
@@ -65,13 +81,13 @@ Configuration errors such as unknown aliases, invalid field references, unsuppor
 
 `validate` defaults to concise text for people and CI logs. `--format json` prints a stable object with `release`, overall `status`, and ordered `checks`. Each check has `id`, `status`, `affected_rows`, `message`, and up to three `examples` on failure. Failure counts are per invalid field value for schema checks and per affected source row for other checks. JSON is printed on stdout, and configuration/execution errors go to stderr.
 
-`manifest` writes deterministic `manifest.json` containing release identity and, for each configured file, its relative path, byte size, and SHA-256. File entries are sorted by path and no timestamp is added. Generate it after successful validation. `verify` compares the current release identity and configured file set with the manifest, then checks each file's size and SHA-256. Check in the manifest with a dataset release if the release workflow must verify it later. A manifest missing from disk or malformed JSON exits with code 2; changed or missing tracked files exit with code 1.
+`manifest` writes deterministic `manifest.json` containing release identity and a sorted `files` map with byte size and SHA-256 for both `release.yaml` and every configured data file. No timestamp is added. `verify` checks the current `release.yaml` bytes as well as release identity and each configured file's size and SHA-256, so post-manifest edits to the release specification fail verification. Regenerate manifests created by earlier pre-release versions because they do not include the specification hash. Check in the manifest with a dataset release if the release workflow must verify it later. A manifest missing from disk or malformed JSON exits with code 2; changed or missing tracked files or a changed release specification exit with code 1.
 
 Exit codes are `0` for success, `1` for dataset validation or integrity failure, and `2` for configuration, malformed input, or execution errors. All commands are noninteractive.
 
 ## GitHub Actions release gate
 
-Build ReleaseGuard from a pinned commit or install a published binary for the runner platform. The example below uses a pinned source revision; replace `<releaseguard-commit-sha>` with a real commit before use. Validation runs on pull requests. Release tags run both validation and manifest verification before any publishing step.
+The example below downloads the pinned Linux x86_64 binary, verifies its checksum, and runs it against the dataset checkout. Validation runs on pull requests; dataset release tags also verify the checked-in manifest before any publishing step. Change the version and asset name together when upgrading ReleaseGuard.
 
 ```yaml
 name: Dataset gate
@@ -86,20 +102,28 @@ jobs:
       - uses: actions/checkout@v5
         with:
           path: dataset
-      - uses: actions/checkout@v5
-        with:
-          repository: KageRyo/ReleaseGuard
-          ref: <releaseguard-commit-sha>
-          path: releaseguard-src
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --release --locked --manifest-path releaseguard-src/Cargo.toml
-      - run: releaseguard-src/target/release/releaseguard validate dataset
+      - name: Download ReleaseGuard v0.1.0
+        env:
+          RELEASEGUARD_VERSION: v0.1.0
+        run: |
+          set -euo pipefail
+          archive="releaseguard-${RELEASEGUARD_VERSION}-linux-x86_64.tar.gz"
+          url="https://github.com/KageRyo/ReleaseGuard/releases/download/${RELEASEGUARD_VERSION}"
+          curl -fsSLO "$url/$archive"
+          curl -fsSLO "$url/SHA256SUMS"
+          grep -F "  $archive" SHA256SUMS | sha256sum --check
+          tar -xzf "$archive"
+      - run: ./releaseguard validate dataset
       - if: startsWith(github.ref, 'refs/tags/')
-        run: releaseguard-src/target/release/releaseguard verify dataset
+        run: ./releaseguard verify dataset
 ```
 
 This repository's own CI runs formatting, Clippy, tests, and a release build on pushes and pull requests. A failed gate blocks the job through its nonzero exit code; configure branch protection in the dataset repository if merges must require the job.
 
 ## Limits and roadmap
 
-v0.1 reads local CSV files into memory; it does not support remote data, Parquet, JSON Lines, databases, transformations, statistical profiling, or automatic publishing. Manifest files are integrity records, not signed attestations. Future versions may add other local formats and prebuilt Linux, Windows, and macOS binaries when needed.
+v0.1 reads local CSV files into memory; it does not support remote data, Parquet, JSON Lines, databases, transformations, statistical profiling, or automatic publishing. Manifest files are integrity records, not signed attestations. Linux x86_64, Windows x86_64, and macOS arm64 release binaries are distributed as unsigned archives.
+
+## License
+
+ReleaseGuard is licensed under [Apache-2.0](LICENSE). Release archives also include [third-party license notices](THIRD-PARTY-LICENSES.txt) for bundled dependencies.

@@ -2,7 +2,9 @@
 name = "releaseguard"
 version = "0.1.0"
 edition = "2021"
-description = "A standalone dataset release gate for CI pipelines"
+description = "Validate dataset structure, relationships, temporal constraints, and integrity before release"
+license = "Apache-2.0"
+repository = "https://github.com/KageRyo/ReleaseGuard"
 
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["std"] }

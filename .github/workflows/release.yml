@@ -1,0 +1,144 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check release tag and package version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Expected a stable vMAJOR.MINOR.PATCH tag, got $RELEASE_TAG" >&2
+            exit 1
+          fi
+          package_version="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')"
+          test "$RELEASE_TAG" = "v$package_version"
+
+  build:
+    needs: validate-tag
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            asset: linux-x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset: windows-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            asset: macos-aarch64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          target: ${{ matrix.target }}
+      - name: Test and build
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          cargo test --locked --target "$TARGET"
+          cargo build --release --locked --target "$TARGET"
+      - name: Package Unix binary
+        if: runner.os != 'Windows'
+        env:
+          TARGET: ${{ matrix.target }}
+          ASSET: ${{ matrix.asset }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/package
+          cp "target/$TARGET/release/releaseguard" dist/package/releaseguard
+          cp LICENSE THIRD-PARTY-LICENSES.txt dist/package/
+          archive="releaseguard-${RELEASE_TAG}-${ASSET}.tar.gz"
+          tar -czf "dist/$archive" -C dist/package releaseguard LICENSE THIRD-PARTY-LICENSES.txt
+          tar -tzf "dist/$archive" | sort | diff - <(printf '%s\n' LICENSE THIRD-PARTY-LICENSES.txt releaseguard | sort)
+      - name: Package Windows binary
+        if: runner.os == 'Windows'
+        env:
+          TARGET: ${{ matrix.target }}
+          ASSET: ${{ matrix.asset }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $package = Join-Path $env:RUNNER_TEMP 'releaseguard-package'
+          New-Item -ItemType Directory -Force -Path @('dist', $package) | Out-Null
+          Copy-Item -Path "target/$env:TARGET/release/releaseguard.exe" -Destination (Join-Path $package 'releaseguard.exe')
+          Copy-Item -Path @('LICENSE', 'THIRD-PARTY-LICENSES.txt') -Destination $package
+          $archiveName = 'releaseguard-{0}-{1}.zip' -f $env:RELEASE_TAG, $env:ASSET
+          $archive = Join-Path 'dist' $archiveName
+          Compress-Archive -Path (Join-Path $package '*') -DestinationPath $archive
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $archive).Path)
+          try {
+            $entries = @($zip.Entries | ForEach-Object { $_.FullName } | Sort-Object)
+            $expected = @('LICENSE', 'THIRD-PARTY-LICENSES.txt', 'releaseguard.exe')
+            if (Compare-Object $expected $entries) { throw "Unexpected files in $archive" }
+          } finally {
+            $zip.Dispose()
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: releaseguard-${{ matrix.asset }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 1
+
+  draft-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: releaseguard-*
+          merge-multiple: true
+          path: dist
+      - name: Create checksums
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(dist/*.tar.gz dist/*.zip)
+          test "${#archives[@]}" -eq 3
+          (cd dist && sha256sum "releaseguard-${RELEASE_TAG}-"* | LC_ALL=C sort -k2,2 > SHA256SUMS)
+          (cd dist && sha256sum --check SHA256SUMS)
+      - name: Create or update draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > draft-state 2>/dev/null; then
+            if [[ "$(cat draft-state)" != true ]]; then
+              echo "Refusing to replace assets on a published release." >&2
+              exit 1
+            fi
+            gh release upload "$RELEASE_TAG" dist/* --clobber
+          else
+            args=(--draft --verify-tag --title "ReleaseGuard $RELEASE_TAG")
+            notes="docs/releases/$RELEASE_TAG.md"
+            if [[ -f "$notes" ]]; then
+              args+=(--notes-file "$notes")
+            else
+              args+=(--generate-notes)
+            fi
+            gh release create "$RELEASE_TAG" dist/* "${args[@]}"
+          fi

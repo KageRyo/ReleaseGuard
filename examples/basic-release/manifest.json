@@ -1,0 +1,16 @@
+{
+  "release": {
+    "name": "example-dataset",
+    "version": "1.0.0"
+  },
+  "files": {
+    "data/actions.csv": {
+      "size": 144,
+      "sha256": "fdf10699b6f68ac6e468e8f4490b891dbb955804266b1c2a3ac68dced087fcbe"
+    },
+    "data/events.csv": {
+      "size": 83,
+      "sha256": "28970a1fe535f118259ea256d3c9bb7d25e71985a9c50b38ceccc9ffcf93d406"
+    }
+  }
+}

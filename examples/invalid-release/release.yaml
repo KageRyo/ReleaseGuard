@@ -1,0 +1,38 @@
+release:
+  name: invalid-example
+  version: 0.1.0
+
+files:
+  events:
+    path: data/events.csv
+    format: csv
+    schema:
+      event_id: { type: string, nullable: false }
+      occurred_at: { type: datetime, nullable: false }
+  actions:
+    path: data/actions.csv
+    format: csv
+    schema:
+      action_id: { type: string, nullable: false }
+      event_id: { type: string, nullable: false }
+      created_at: { type: datetime, nullable: false }
+      priority: { type: integer, nullable: false }
+      required_note: { type: string, nullable: false }
+      missing_column: { type: string, nullable: false }
+
+checks:
+  - id: event-id-unique
+    type: unique
+    field: events.event_id
+  - id: action-event-reference
+    type: foreign_key
+    from: actions.event_id
+    to: events.event_id
+  - id: action-after-event
+    type: temporal_order
+    left: actions.created_at
+    operator: ">="
+    right: events.occurred_at
+    join:
+      left: actions.event_id
+      right: events.event_id

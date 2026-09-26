@@ -47,11 +47,15 @@ jobs:
         with:
           target: ${{ matrix.target }}
       - name: Test and build
+        shell: pwsh
         env:
           TARGET: ${{ matrix.target }}
         run: |
-          cargo test --locked --target "$TARGET"
-          cargo build --release --locked --target "$TARGET"
+          $ErrorActionPreference = 'Stop'
+          cargo test --locked --target "$env:TARGET"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo build --release --locked --target "$env:TARGET"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Package Unix binary
         if: runner.os != 'Windows'
         env:

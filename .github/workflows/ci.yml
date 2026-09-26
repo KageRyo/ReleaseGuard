@@ -24,13 +24,13 @@ jobs:
         run: bash scripts/test-action-integration.sh
 
   released-action-smoke:
-    if: github.event_name == 'release' && github.event.release.tag_name == 'v0.2.0'
+    if: github.event_name == 'release' && github.event.release.tag_name == 'v0.2.1'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: v0.2.0
+          ref: v0.2.1
       - name: Run the published Action against a valid fixture
-        uses: KageRyo/ReleaseGuard@v0.2.0
+        uses: KageRyo/ReleaseGuard@v0.2.1
         with:
           path: examples/basic-release

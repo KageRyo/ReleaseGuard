@@ -1,6 +1,6 @@
 [package]
 name = "releaseguard"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Validate dataset structure, relationships, temporal constraints, and integrity before release"
 license = "Apache-2.0"

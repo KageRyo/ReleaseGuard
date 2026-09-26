@@ -1,5 +1,9 @@
-name: ReleaseGuard
+name: ReleaseGuard Dataset Validator
 description: Validate a dataset with a checksum-verified ReleaseGuard release binary.
+author: KageRyo
+branding:
+  icon: shield
+  color: blue
 inputs:
   path:
     description: Dataset directory containing release.yaml, relative to the workspace.

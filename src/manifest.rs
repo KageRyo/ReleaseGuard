@@ -22,8 +22,10 @@ pub struct Manifest {
 
 fn file_path(root: &Path, relative: &Path) -> Result<Option<PathBuf>, String> {
     let path = root.join(relative);
-    if !path.exists() {
-        return Ok(None);
+    match fs::symlink_metadata(&path) {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("{}: {error}", relative.display())),
     }
     let resolved = path
         .canonicalize()
@@ -79,6 +81,7 @@ pub fn generate(root: &Path, config: &Config) -> Result<(), String> {
     let mut output = serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?;
     output.push(b'\n');
     let path = root.join("manifest.json");
+    check_manifest_path(&path, true)?;
     let mut file = File::create(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     file.write_all(&output)
         .map_err(|e| format!("{}: {e}", path.display()))?;
@@ -99,8 +102,9 @@ pub fn verify(root: &Path, config: &Config) -> Result<Verification, String> {
     let root = root
         .canonicalize()
         .map_err(|e| format!("{}: {e}", root.display()))?;
-    let content =
-        fs::read(root.join("manifest.json")).map_err(|e| format!("manifest.json: {e}"))?;
+    let path = root.join("manifest.json");
+    check_manifest_path(&path, false)?;
+    let content = fs::read(&path).map_err(|e| format!("manifest.json: {e}"))?;
     let manifest: Manifest =
         serde_json::from_slice(&content).map_err(|e| format!("manifest.json: {e}"))?;
     let mut checks = Vec::new();
@@ -155,4 +159,16 @@ pub fn verify(root: &Path, config: &Config) -> Result<Verification, String> {
         ));
     }
     Ok(Verification { checks })
+}
+
+fn check_manifest_path(path: &Path, allow_missing: bool) -> Result<(), String> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            Err("manifest.json must not be a symbolic link".into())
+        }
+        Ok(metadata) if !metadata.is_file() => Err("manifest.json must be a regular file".into()),
+        Ok(_) => Ok(()),
+        Err(error) if allow_missing && error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("manifest.json: {error}")),
+    }
 }

@@ -38,7 +38,7 @@ pub fn load(root: &Path, config: &Config) -> Result<BTreeMap<String, Option<Tabl
             crate::config::FileFormat::Csv => {}
         }
         let path = root.join(&spec.path);
-        if !path.exists() {
+        if is_missing(&path)? {
             tables.insert(alias.clone(), None);
             continue;
         }
@@ -83,4 +83,12 @@ pub fn load(root: &Path, config: &Config) -> Result<BTreeMap<String, Option<Tabl
         tables.insert(alias.clone(), Some(Table { columns, rows }));
     }
     Ok(tables)
+}
+
+fn is_missing(path: &Path) -> Result<bool, String> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(false),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(true),
+        Err(error) => Err(format!("{}: {error}", path.display())),
+    }
 }

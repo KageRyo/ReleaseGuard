@@ -139,7 +139,7 @@ impl Config {
                     "{alias}: path must be a relative path without . or .."
                 ));
             }
-            if file.path == Path::new("manifest.json") {
+            if file.path.starts_with(Path::new("manifest.json")) {
                 return Err(format!("{alias}: manifest.json cannot be a dataset file"));
             }
             if !paths.insert(file.path.clone()) {

@@ -210,6 +210,23 @@ fn manifest_is_deterministic_and_verify_detects_changes_and_missing_files() {
     assert_eq!(command(&["verify", path]).status.code(), Some(1));
 }
 
+#[cfg(unix)]
+#[test]
+fn manifest_symlink_is_rejected_without_touching_its_target() {
+    use std::os::unix::fs::symlink;
+
+    let dataset = fixture("basic-release");
+    let outside = TempDir::new().unwrap();
+    let target = outside.path().join("manifest-target.json");
+    fs::write(&target, "leave this file alone").unwrap();
+    symlink(&target, dataset.path().join("manifest.json")).unwrap();
+    let path = dataset.path().to_str().unwrap();
+
+    assert_eq!(command(&["manifest", path]).status.code(), Some(2));
+    assert_eq!(command(&["verify", path]).status.code(), Some(2));
+    assert_eq!(fs::read_to_string(target).unwrap(), "leave this file alone");
+}
+
 #[test]
 fn init_creates_usable_config_without_overwriting() {
     let temp = TempDir::new().unwrap();

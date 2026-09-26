@@ -4,16 +4,36 @@
 
 ReleaseGuard checks a candidate CSV dataset against a small declarative `release.yaml`, then returns PASS or FAIL before publication. It checks file schemas, uniqueness, references, timestamp order, and SHA-256 integrity. It is a local command line program with no Python runtime, database, service, or network connection during validation. It is not an ETL tool, data catalog, lineage platform, ML validator, or replacement for Great Expectations or DVC.
 
+## GitHub Actions
+
+Use the composite Action in a dataset repository after checking out its files. Pin the Action to an immutable version; the Action tag and downloaded CLI release use the same version. The Action downloads the Linux x86_64 archive over HTTPS and verifies it against `SHA256SUMS` before extraction and execution. It does not require Rust, Python, or Node.js in the consumer repository.
+
+```yaml
+name: Dataset gate
+on:
+  pull_request:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: KageRyo/ReleaseGuard@v0.2.0
+        with:
+          path: .
+```
+
+`path` is relative to the checked-out workspace and defaults to `.`. The selected directory must contain its own `release.yaml`. The Action currently runs `releaseguard validate` on Linux x86_64 (`ubuntu-latest`); use the standalone CLI for `manifest`, `verify`, other platforms, or advanced options.
+
 ## Install
 
-Download the archive for your platform from [GitHub Releases](https://github.com/KageRyo/ReleaseGuard/releases). The v0.1.0 assets are named `releaseguard-v0.1.0-linux-x86_64.tar.gz`, `releaseguard-v0.1.0-windows-x86_64.zip`, and `releaseguard-v0.1.0-macos-aarch64.tar.gz`. Each archive includes the executable and its license notices; `SHA256SUMS` covers all three archives.
+Download the archive for your platform from [GitHub Releases](https://github.com/KageRyo/ReleaseGuard/releases). The v0.2.0 assets are named `releaseguard-v0.2.0-linux-x86_64.tar.gz`, `releaseguard-v0.2.0-windows-x86_64.zip`, and `releaseguard-v0.2.0-macos-aarch64.tar.gz`. Each archive includes the executable and its license notices; `SHA256SUMS` covers all three archives.
 
 The Linux x86_64 binary targets GNU/Linux and is built on Ubuntu 22.04. The macOS binary supports Apple silicon (arm64).
 
 On Linux x86_64 or macOS arm64, extract the matching `.tar.gz` archive and put the executable on your `PATH`. Use the `linux-x86_64` asset on Linux and `macos-aarch64` on Apple silicon.
 
 ```sh
-tar -xzf releaseguard-v0.1.0-linux-x86_64.tar.gz
+tar -xzf releaseguard-v0.2.0-linux-x86_64.tar.gz
 install -m 0755 releaseguard "$HOME/.local/bin/releaseguard"
 releaseguard --help
 ```
@@ -87,42 +107,11 @@ Exit codes are `0` for success, `1` for dataset validation or integrity failure,
 
 ## GitHub Actions release gate
 
-The example below downloads the pinned Linux x86_64 binary, verifies its checksum, and runs it against the dataset checkout. Validation runs on pull requests; dataset release tags also verify the checked-in manifest before any publishing step. Change the version and asset name together when upgrading ReleaseGuard.
-
-```yaml
-name: Dataset gate
-on:
-  pull_request:
-  push:
-    tags: ['v*']
-jobs:
-  gate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          path: dataset
-      - name: Download ReleaseGuard v0.1.0
-        env:
-          RELEASEGUARD_VERSION: v0.1.0
-        run: |
-          set -euo pipefail
-          archive="releaseguard-${RELEASEGUARD_VERSION}-linux-x86_64.tar.gz"
-          url="https://github.com/KageRyo/ReleaseGuard/releases/download/${RELEASEGUARD_VERSION}"
-          curl -fsSLO "$url/$archive"
-          curl -fsSLO "$url/SHA256SUMS"
-          grep -F "  $archive" SHA256SUMS | sha256sum --check
-          tar -xzf "$archive"
-      - run: ./releaseguard validate dataset
-      - if: startsWith(github.ref, 'refs/tags/')
-        run: ./releaseguard verify dataset
-```
-
-This repository's own CI runs formatting, Clippy, tests, and a release build on pushes and pull requests. A failed gate blocks the job through its nonzero exit code; configure branch protection in the dataset repository if merges must require the job.
+The Action runs `validate` and passes ReleaseGuard's exit code to the job. Use the standalone CLI for `manifest`, `verify`, or other commands. This repository's own CI runs formatting, Clippy, tests, a release build, and an Action integration smoke test on pushes and pull requests. Configure branch protection in a dataset repository if merges must require the validation job.
 
 ## Limits and roadmap
 
-v0.1 reads local CSV files into memory; it does not support remote data, Parquet, JSON Lines, databases, transformations, statistical profiling, or automatic publishing. Manifest files are integrity records, not signed attestations. Linux x86_64, Windows x86_64, and macOS arm64 release binaries are distributed as unsigned archives.
+The CLI reads local CSV files into memory; it does not support remote data, Parquet, JSON Lines, databases, transformations, statistical profiling, or automatic publishing. Manifest files are integrity records, not signed attestations. Linux x86_64, Windows x86_64, and macOS arm64 release binaries are distributed as unsigned archives.
 
 ## License
 

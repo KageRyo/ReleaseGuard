@@ -3,9 +3,12 @@ name: CI
 on:
   push:
   pull_request:
+  release:
+    types: [published]
 
 jobs:
   rust:
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -17,3 +20,17 @@ jobs:
       - run: cargo clippy --all-targets --all-features -- -D warnings
       - run: cargo test --locked
       - run: cargo build --release --locked
+      - name: Test GitHub Action integration
+        run: bash scripts/test-action-integration.sh
+
+  released-action-smoke:
+    if: github.event_name == 'release' && github.event.release.tag_name == 'v0.2.0'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: v0.2.0
+      - name: Run the published Action against a valid fixture
+        uses: KageRyo/ReleaseGuard@v0.2.0
+        with:
+          path: examples/basic-release

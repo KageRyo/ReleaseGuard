@@ -24,6 +24,11 @@ jobs:
           fi
           package_version="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')"
           test "$RELEASE_TAG" = "v$package_version"
+          action_version="$(<action-version.txt)"
+          if [[ "$RELEASE_TAG" != "$action_version" ]]; then
+            echo "Release tag $RELEASE_TAG does not match Action binary version $action_version." >&2
+            exit 1
+          fi
 
   build:
     needs: validate-tag

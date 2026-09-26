@@ -1,0 +1,16 @@
+name: ReleaseGuard
+description: Validate a dataset with a checksum-verified ReleaseGuard release binary.
+inputs:
+  path:
+    description: Dataset directory containing release.yaml, relative to the workspace.
+    required: false
+    default: .
+runs:
+  using: composite
+  steps:
+    - name: Download, verify, and validate with ReleaseGuard
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        DATASET_PATH: ${{ inputs.path }}
+      run: bash "$ACTION_PATH/scripts/releaseguard-action.sh" "$DATASET_PATH"

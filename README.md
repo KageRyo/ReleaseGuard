@@ -83,10 +83,10 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           path: dataset
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: KageRyo/ReleaseGuard
           ref: <releaseguard-commit-sha>

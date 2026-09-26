@@ -130,12 +130,18 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          shopt -s nullglob
+          assets=(dist/*.tar.gz dist/*.zip dist/SHA256SUMS)
+          if [[ "${#assets[@]}" -ne 4 ]]; then
+            echo "Expected three binary archives and SHA256SUMS." >&2
+            exit 1
+          fi
           if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > draft-state 2>/dev/null; then
             if [[ "$(cat draft-state)" != true ]]; then
               echo "Refusing to replace assets on a published release." >&2
               exit 1
             fi
-            gh release upload "$RELEASE_TAG" dist/* --clobber
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
           else
             args=(--draft --verify-tag --title "ReleaseGuard $RELEASE_TAG")
             notes="docs/releases/$RELEASE_TAG.md"
@@ -144,5 +150,5 @@ jobs:
             else
               args+=(--generate-notes)
             fi
-            gh release create "$RELEASE_TAG" dist/* "${args[@]}"
+            gh release create "$RELEASE_TAG" "${assets[@]}" "${args[@]}"
           fi

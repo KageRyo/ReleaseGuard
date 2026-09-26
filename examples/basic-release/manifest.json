@@ -11,6 +11,10 @@
     "data/events.csv": {
       "size": 83,
       "sha256": "28970a1fe535f118259ea256d3c9bb7d25e71985a9c50b38ceccc9ffcf93d406"
+    },
+    "release.yaml": {
+      "size": 972,
+      "sha256": "230559f1fb983fb5ed482a56daf87f6da7f4c6842e68a45dbb187f39a75ae2aa"
     }
   }
 }

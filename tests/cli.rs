@@ -134,6 +134,13 @@ fn malformed_config_unknown_alias_and_unsafe_path_exit_two() {
             .code(),
         Some(2)
     );
+    config_edit(temp.path(), "path: manifest.json", "path: release.yaml");
+    assert_eq!(
+        command(&["manifest", temp.path().to_str().unwrap()])
+            .status
+            .code(),
+        Some(2)
+    );
     fs::write(temp.path().join("release.yaml"), "release: [").unwrap();
     assert_eq!(
         command(&["validate", temp.path().to_str().unwrap()])
@@ -208,6 +215,27 @@ fn manifest_is_deterministic_and_verify_detects_changes_and_missing_files() {
     assert_eq!(command(&["verify", path]).status.code(), Some(1));
     fs::remove_file(temp.path().join("data/events.csv")).unwrap();
     assert_eq!(command(&["verify", path]).status.code(), Some(1));
+}
+
+#[test]
+fn verify_fails_when_release_yaml_changes_after_manifest_generation() {
+    let temp = fixture("basic-release");
+    let path = temp.path().to_str().unwrap();
+    assert_eq!(command(&["manifest", path]).status.code(), Some(0));
+
+    let spec = temp.path().join("release.yaml");
+    let original = fs::read_to_string(&spec).unwrap();
+    let changed = original.replace(
+        "action_id: { type: string, nullable: false }",
+        "action_id: { type: string, nullable: true }",
+    );
+    assert_ne!(changed, original);
+    fs::write(spec, changed).unwrap();
+
+    assert_eq!(command(&["verify", path]).status.code(), Some(1));
+    let manifest: Value =
+        serde_json::from_slice(&fs::read(temp.path().join("manifest.json")).unwrap()).unwrap();
+    assert!(manifest["files"]["release.yaml"].is_object());
 }
 
 #[cfg(unix)]

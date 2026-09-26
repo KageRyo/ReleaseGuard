@@ -139,8 +139,10 @@ impl Config {
                     "{alias}: path must be a relative path without . or .."
                 ));
             }
-            if file.path.starts_with(Path::new("manifest.json")) {
-                return Err(format!("{alias}: manifest.json cannot be a dataset file"));
+            if file.path.starts_with(Path::new("manifest.json"))
+                || file.path.starts_with(Path::new("release.yaml"))
+            {
+                return Err(format!("{alias}: path is reserved by ReleaseGuard"));
             }
             if !paths.insert(file.path.clone()) {
                 return Err(format!("duplicate file path: {}", file.path.display()));

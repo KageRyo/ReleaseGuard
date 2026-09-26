@@ -20,6 +20,17 @@ pub struct Manifest {
     pub files: BTreeMap<String, Entry>,
 }
 
+fn expected_files(config: &Config) -> BTreeMap<String, PathBuf> {
+    let mut files = BTreeMap::from([("release.yaml".into(), PathBuf::from("release.yaml"))]);
+    files.extend(config.files.values().map(|spec| {
+        (
+            spec.path.to_string_lossy().replace('\\', "/"),
+            spec.path.clone(),
+        )
+    }));
+    files
+}
+
 fn file_path(root: &Path, relative: &Path) -> Result<Option<PathBuf>, String> {
     let path = root.join(relative);
     match fs::symlink_metadata(&path) {
@@ -68,11 +79,11 @@ pub fn generate(root: &Path, config: &Config) -> Result<(), String> {
         .canonicalize()
         .map_err(|e| format!("{}: {e}", root.display()))?;
     let mut files = BTreeMap::new();
-    for spec in config.files.values() {
-        let Some(path) = file_path(&root, &spec.path)? else {
-            return Err(format!("missing configured file: {}", spec.path.display()));
+    for (name, relative) in expected_files(config) {
+        let Some(path) = file_path(&root, &relative)? else {
+            return Err(format!("missing configured file: {}", relative.display()));
         };
-        files.insert(spec.path.to_string_lossy().replace('\\', "/"), hash(&path)?);
+        files.insert(name, hash(&path)?);
     }
     let manifest = Manifest {
         release: config.release.clone(),
@@ -120,20 +131,15 @@ pub fn verify(root: &Path, config: &Config) -> Result<Verification, String> {
         }
         .into(),
     ));
-    let configured: std::collections::BTreeSet<_> = config
-        .files
-        .values()
-        .map(|f| f.path.to_string_lossy().replace('\\', "/"))
-        .collect();
+    let expected_files = expected_files(config);
     for extra in manifest
         .files
         .keys()
-        .filter(|path| !configured.contains(*path))
+        .filter(|path| !expected_files.contains_key(*path))
     {
         checks.push((extra.clone(), false, "Unexpected manifest entry.".into()));
     }
-    for spec in config.files.values() {
-        let name = spec.path.to_string_lossy().replace('\\', "/");
+    for (name, relative) in expected_files {
         let Some(expected) = manifest.files.get(&name) else {
             checks.push((name, false, "Missing manifest entry.".into()));
             continue;
@@ -141,7 +147,7 @@ pub fn verify(root: &Path, config: &Config) -> Result<Verification, String> {
         if expected.sha256.len() != 64 || !expected.sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err(format!("manifest.json: invalid SHA-256 for {name}"));
         }
-        let Some(path) = file_path(&root, &spec.path)? else {
+        let Some(path) = file_path(&root, &relative)? else {
             checks.push((name, false, "Missing file.".into()));
             continue;
         };

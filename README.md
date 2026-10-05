@@ -118,3 +118,7 @@ The CLI reads local CSV files into memory; it does not support remote data, Parq
 ## License
 
 ReleaseGuard is licensed under [Apache-2.0](LICENSE). Release archives also include [third-party license notices](THIRD-PARTY-LICENSES.txt) for bundled dependencies.
+
+## Maintenance
+
+See [maintenance conventions](docs/maintenance.md) for dependency updates, required CI, Action pinning and release validation.

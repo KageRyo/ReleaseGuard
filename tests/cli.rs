@@ -267,3 +267,84 @@ fn init_creates_usable_config_without_overwriting() {
     fs::write(target.join("data.csv"), "id\nA001\n").unwrap();
     assert_eq!(command(&["validate", path]).status.code(), Some(0));
 }
+
+#[test]
+fn yaml_anchors_and_aliases_preserve_validation_output() {
+    let temp = fixture("basic-release");
+    let (_, expected) = validate(temp.path());
+    let config = temp.path().join("release.yaml");
+    let content = fs::read_to_string(&config).unwrap();
+    fs::write(
+        config,
+        content.replacen(
+            "event_id: { type: string, nullable: false }",
+            "event_id: &required_string { type: string, nullable: false }",
+            1,
+        ),
+    )
+    .unwrap();
+    config_edit(
+        temp.path(),
+        "action_id: { type: string, nullable: false }",
+        "action_id: *required_string",
+    );
+    let (code, actual) = validate(temp.path());
+    assert_eq!(code, 0);
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn yaml_quoted_and_folded_unicode_scalars_preserve_release_identity() {
+    for (scalar, expected) in [("'yes'", "yes"), (">-\n    台灣\n    資料", "台灣 資料")] {
+        let temp = fixture("basic-release");
+        config_edit(
+            temp.path(),
+            "name: example-dataset",
+            &format!("name: {scalar}"),
+        );
+        config_edit(temp.path(), "version: 1.0.0", "version: '01'");
+        let (code, json) = validate(temp.path());
+        assert_eq!(code, 0);
+        assert_eq!(json["release"]["name"], expected);
+        assert_eq!(json["release"]["version"], "01");
+    }
+}
+
+#[test]
+fn yaml_duplicate_unknown_and_multiple_documents_remain_configuration_errors() {
+    for (from, to) in [
+        (
+            "name: example-dataset",
+            "name: example-dataset\n  name: duplicate",
+        ),
+        (
+            "name: example-dataset",
+            "name: example-dataset\n  extra: unknown",
+        ),
+        ("name: example-dataset", "name: *undefined"),
+    ] {
+        let temp = fixture("basic-release");
+        config_edit(temp.path(), from, to);
+        let output = command(&[
+            "validate",
+            temp.path().to_str().unwrap(),
+            "--format",
+            "json",
+        ]);
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("release.yaml:"));
+    }
+    let temp = fixture("basic-release");
+    let config = temp.path().join("release.yaml");
+    let content = fs::read_to_string(&config).unwrap();
+    fs::write(config, format!("{content}\n---\n{content}")).unwrap();
+    let output = command(&[
+        "validate",
+        temp.path().to_str().unwrap(),
+        "--format",
+        "json",
+    ]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+}

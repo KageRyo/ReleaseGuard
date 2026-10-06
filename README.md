@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: KageRyo/ReleaseGuard@v0.2.1
+      - uses: KageRyo/ReleaseGuard@v0.2.2
         with:
           path: .
 ```
@@ -28,14 +28,14 @@ jobs:
 
 ## Install
 
-Download the archive for your platform from [GitHub Releases](https://github.com/KageRyo/ReleaseGuard/releases). The v0.2.1 assets are named `releaseguard-v0.2.1-linux-x86_64.tar.gz`, `releaseguard-v0.2.1-windows-x86_64.zip`, and `releaseguard-v0.2.1-macos-aarch64.tar.gz`. Each archive includes the executable and its license notices; `SHA256SUMS` covers all three archives.
+Download the archive for your platform from [GitHub Releases](https://github.com/KageRyo/ReleaseGuard/releases). The v0.2.2 assets are named `releaseguard-v0.2.2-linux-x86_64.tar.gz`, `releaseguard-v0.2.2-windows-x86_64.zip`, and `releaseguard-v0.2.2-macos-aarch64.tar.gz`. Each archive includes the executable and its license notices; `SHA256SUMS` covers all three archives.
 
 The Linux x86_64 binary targets GNU/Linux and is built on Ubuntu 22.04. The macOS binary supports Apple silicon (arm64).
 
 On Linux x86_64 or macOS arm64, extract the matching `.tar.gz` archive and put the executable on your `PATH`. Use the `linux-x86_64` asset on Linux and `macos-aarch64` on Apple silicon.
 
 ```sh
-tar -xzf releaseguard-v0.2.1-linux-x86_64.tar.gz
+tar -xzf releaseguard-v0.2.2-linux-x86_64.tar.gz
 install -m 0755 releaseguard "$HOME/.local/bin/releaseguard"
 releaseguard --help
 ```

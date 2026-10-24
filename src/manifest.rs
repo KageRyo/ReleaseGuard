@@ -93,9 +93,13 @@ pub fn generate(root: &Path, config: &Config) -> Result<(), String> {
     output.push(b'\n');
     let path = root.join("manifest.json");
     check_manifest_path(&path, true)?;
-    let mut file = File::create(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    // Replace the directory entry rather than truncating a hard-linked target.
+    let mut file =
+        tempfile::NamedTempFile::new_in(&root).map_err(|e| format!("{}: {e}", path.display()))?;
     file.write_all(&output)
         .map_err(|e| format!("{}: {e}", path.display()))?;
+    file.persist(&path)
+        .map_err(|e| format!("{}: {}", path.display(), e.error))?;
     Ok(())
 }
 

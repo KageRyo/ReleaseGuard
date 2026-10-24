@@ -348,3 +348,23 @@ fn yaml_duplicate_unknown_and_multiple_documents_remain_configuration_errors() {
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
 }
+
+#[test]
+fn manifest_generation_does_not_truncate_hard_link_target() {
+    let dataset = fixture("basic-release");
+    let outside = TempDir::new().unwrap();
+    let target = outside.path().join("outside.json");
+    fs::write(&target, b"keep outside data").unwrap();
+    fs::hard_link(&target, dataset.path().join("manifest.json")).unwrap();
+
+    let output = command(&["manifest", dataset.path().to_str().unwrap()]);
+
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(fs::read(&target).unwrap(), b"keep outside data");
+    assert_eq!(
+        command(&["verify", dataset.path().to_str().unwrap()])
+            .status
+            .code(),
+        Some(0)
+    );
+}

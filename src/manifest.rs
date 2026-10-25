@@ -2,7 +2,7 @@ use crate::config::{Config, Release};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
@@ -93,9 +93,39 @@ pub fn generate(root: &Path, config: &Config) -> Result<(), String> {
     output.push(b'\n');
     let path = root.join("manifest.json");
     check_manifest_path(&path, true)?;
-    let mut file = File::create(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    // The private directory protects exclusive creation without overriding the umask.
+    let workspace = tempfile::Builder::new()
+        .prefix(".manifest.")
+        .tempdir_in(&root)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    let temporary = workspace.path().join("manifest.json");
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
     file.write_all(&output)
         .map_err(|e| format!("{}: {e}", path.display()))?;
+    match fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.is_file() => {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                file.set_permissions(fs::Permissions::from_mode(
+                    metadata.permissions().mode() & 0o777,
+                ))
+                .map_err(|e| format!("{}: {e}", path.display()))?;
+            }
+            #[cfg(not(unix))]
+            file.set_permissions(metadata.permissions())
+                .map_err(|e| format!("{}: {e}", path.display()))?;
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("{}: {error}", path.display())),
+    }
+    drop(file);
+    fs::rename(&temporary, &path).map_err(|e| format!("{}: {e}", path.display()))?;
     Ok(())
 }
 

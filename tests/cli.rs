@@ -368,3 +368,29 @@ fn manifest_generation_does_not_truncate_hard_link_target() {
         Some(0)
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn manifest_preserves_ordinary_and_existing_rwx_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dataset = fixture("basic-release");
+    let reference = dataset.path().join("ordinary");
+    fs::write(&reference, b"reference").unwrap();
+    let path = dataset.path().to_str().unwrap();
+    let manifest = dataset.path().join("manifest.json");
+    assert_eq!(command(&["manifest", path]).status.code(), Some(0));
+    assert_eq!(
+        fs::metadata(&manifest).unwrap().permissions().mode() & 0o7777,
+        fs::metadata(&reference).unwrap().permissions().mode() & 0o7777
+    );
+
+    for mode in [0o640, 0o2640] {
+        fs::set_permissions(&manifest, fs::Permissions::from_mode(mode)).unwrap();
+        assert_eq!(command(&["manifest", path]).status.code(), Some(0));
+        assert_eq!(
+            fs::metadata(&manifest).unwrap().permissions().mode() & 0o7777,
+            0o640
+        );
+    }
+}

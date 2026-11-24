@@ -2,6 +2,7 @@ use crate::config::{Config, Release};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -68,10 +69,14 @@ fn hash(path: &Path) -> Result<Entry, String> {
         digest.update(&buffer[..read]);
         size += read as u64;
     }
-    Ok(Entry {
-        size,
-        sha256: format!("{:x}", digest.finalize()),
-    })
+    let sha256 = digest
+        .finalize()
+        .iter()
+        .fold(String::with_capacity(64), |mut hex, byte| {
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        });
+    Ok(Entry { size, sha256 })
 }
 
 pub fn generate(root: &Path, config: &Config) -> Result<(), String> {
